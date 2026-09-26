@@ -2,14 +2,13 @@
 
 A resilient, full-stack product price and stock monitoring web application built for the **INE Software Engineer Intern Assignment**.
 
-The application tracks product prices and stock availability over time from INE's mock storefront ([demo.inelabteamdev.com](https://demo.inelabteamdev.com/)), which is deliberately engineered with anti-scraping challenges, client-side rendering, synthetic latency, intermittent failures, and internal retry loops.
+The application tracks product prices and stock availability over time from INE's mock storefront ([demo.inelabteamdev.com](https://demo.inelabteamdev.com/)).
 
 ---
 
 ## 🚀 Live Demo & Repository
 
 - **Live Frontend**: [https://your-app.vercel.app](https://your-app.vercel.app) *(replace after deployment)*
-- **Live Backend API**: [https://your-app.onrender.com](https://your-app.onrender.com) *(replace after deployment)*
 - **Database**: Supabase (PostgreSQL)
 - **Repository**: [https://github.com/pchhabra07/INE_ProductPriceTracker](https://github.com/pchhabra07/INE_ProductPriceTracker)
 
@@ -20,7 +19,6 @@ The application tracks product prices and stock availability over time from INE'
 | Layer | Technology | Details |
 |---|---|---|
 | **Frontend** | React (Vite) | Single-page application, client routing (`react-router-dom`), responsive modern UI |
-| **Styling** | Vanilla CSS | Custom design system with glassmorphism, responsive grids, sleek dark mode, micro-animations |
 | **Backend** | Node.js + Express | RESTful API following MVC pattern, modular scrapers, CORS-enabled |
 | **Database** | Supabase (PostgreSQL) | Relational schema with `tracked_products` and `price_history` tables |
 | **Scraper** | Playwright (Headless & Headed) | Automated browser to handle SPA rendering, anti-bot mouse-tracking, and handshake resolution |
@@ -61,37 +59,39 @@ The mock storefront (`https://demo.inelabteamdev.com`) features several delibera
 
 ## 📊 Database Schema (Supabase)
 
-```sql
--- 1. tracked_products table
-create table if not exists tracked_products (
-  id               uuid primary key default gen_random_uuid(),
-  store_product_id text        not null,
-  product_name     text        not null,
-  option_name      text        not null,
-  option_index     int         not null,
-  store_url        text        not null,
-  department       text,
-  brand            text,
-  is_active        boolean     not null default true,
-  created_at       timestamptz not null default now(),
-  unique (store_product_id, option_name)
-);
+Two tables are used. The full SQL schema is in [`backend/supabase_schema.sql`](./backend/supabase_schema.sql).
 
--- 2. price_history table
-create table if not exists price_history (
-  id                  uuid primary key default gen_random_uuid(),
-  tracked_product_id  uuid        not null references tracked_products(id) on delete cascade,
-  price               numeric,                     -- null on failed scrape
-  stock               text,                        -- null on failed scrape
-  scraped_at          timestamptz not null default now(),
-  outcome             text        not null,         -- 'success' | 'retried' | 'failed'
-  attempt_count       int         not null,
-  error_message       text                         -- null on success
-);
+### `tracked_products`
 
-create index if not exists idx_price_history_tracked_product
-  on price_history(tracked_product_id, scraped_at desc);
-```
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `uuid` | Primary Key | Auto-generated unique row ID |
+| `store_product_id` | `text` | NOT NULL | Numeric product ID from the store URL (e.g. `2229`) |
+| `product_name` | `text` | NOT NULL | Human-readable product name |
+| `option_name` | `text` | NOT NULL | Selected option label (e.g. `Instrument only`) |
+| `option_index` | `int` | NOT NULL | 1-based chip index used by the scraper to select the right option |
+| `store_url` | `text` | NOT NULL | Full URL to the product page |
+| `department` | `text` | nullable | Product category / department |
+| `brand` | `text` | nullable | Brand name |
+| `is_active` | `boolean` | NOT NULL, default `true` | Soft-delete flag — false = untracked |
+| `created_at` | `timestamptz` | NOT NULL, default `now()` | When the product was first tracked |
+
+> **Unique constraint**: `(store_product_id, option_name)` — prevents duplicate tracking of the same product option.
+
+### `price_history`
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `uuid` | Primary Key | Auto-generated unique row ID |
+| `tracked_product_id` | `uuid` | FK → `tracked_products.id` | Links this record to a tracked product |
+| `price` | `numeric` | nullable | Scraped price in INR — `NULL` on failed scrapes |
+| `stock` | `text` | nullable | Scraped stock label (e.g. `In Stock`) — `NULL` on failed scrapes |
+| `scraped_at` | `timestamptz` | NOT NULL, default `now()` | UTC timestamp of the scrape attempt |
+| `outcome` | `text` | NOT NULL | `success` / `retried` / `failed` |
+| `attempt_count` | `int` | NOT NULL | Number of outer attempts made by our scraper |
+| `error_message` | `text` | nullable | Error detail on failure — `NULL` on success |
+
+> **Index**: `(tracked_product_id, scraped_at DESC)` for fast per-product history lookups.
 
 ---
 
@@ -166,7 +166,7 @@ Because free-tier Render instances sleep after inactivity, scheduled scrapes are
 
 ---
 
-## 🎥 Observable (Headed) Run for Recording
+## 🎥 Observable Headed Scrape Run
 
 To watch the scraper in headed mode (visible browser, slow-motion actions):
 
