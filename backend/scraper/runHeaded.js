@@ -120,11 +120,38 @@ async function runHeaded() {
       const offerFootText = await page.$eval('.offer-foot span', (el) => el.textContent.trim()).catch(() => '');
       console.log(`[HEADED] Store resolve message: "${offerFootText}"`);
 
-      const priceText = await page.$eval('data.fgy-x1', (el) => el.textContent.trim()).catch(() => null);
+      const priceText = await page.evaluate(() => {
+        const offerRow = document.querySelector('.offer-panel .offer-row');
+        if (!offerRow) return null;
+
+        const candidates = Array.from(offerRow.querySelectorAll('*')).filter((el) => {
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          if (el.getAttribute('aria-hidden') === 'true') return false;
+          if (style.textDecorationLine.includes('line-through') || el.style.textDecoration?.includes('line-through')) return false;
+
+          const text = el.textContent?.trim() || '';
+          if (text.includes('saving') || text.includes('Member price') || text.includes('Refreshing')) return false;
+          if (!/[0-9\uFF10-\uFF19]/.test(text)) return false;
+
+          return true;
+        });
+
+        for (const el of candidates) {
+          if (el.style?.fontSize === '2.4rem' || parseFloat(window.getComputedStyle(el).fontSize) >= 28) {
+            return el.textContent.trim();
+          }
+        }
+
+        const directChild = candidates.find((el) => el.parentElement === offerRow);
+        if (directChild) return directChild.textContent.trim();
+
+        return candidates.length > 0 ? candidates[0].textContent.trim() : null;
+      });
       const price = parsePrice(priceText);
       const stockText = await page.$eval('.avail-pill', (el) => el.textContent.trim()).catch(() => null);
 
-      if (price === null) throw new Error(`Price unparseable: "${priceText}"`);
+      if (price === null) throw new Error(priceText === null ? 'Price element not found' : `Price unparseable: "${priceText}"`);
       if (stockText === null) throw new Error('Stock element not found');
 
       const outcome = attempt > 1 ? 'retried' : 'success';

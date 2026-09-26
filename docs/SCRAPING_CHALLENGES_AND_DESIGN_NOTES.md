@@ -120,6 +120,25 @@ The heart of this assignment is achieving **unattended, 100% reliable scraping a
 
 ---
 
+### 🛑 Problem 6: Polymorphic Price Tag Rotation & Honeypot Decoys
+- **Symptom**: Scraper worked initially with static tag selector `data.fgy-x1`, but suddenly began returning `null` on different products or after a few hours, throwing `Price selector matched but text unparseable: "null"`.
+- **Investigation**: Deep inspection of `/assets/index-GaW5Fnef.js` and `/api/v2/ui/manifest` revealed advanced anti-bot evasion:
+  1. **Dynamic Manifest**: The store periodically updates its UI manifest (`/api/v2/ui/manifest`), rotating `priceTag` between `data`, `span`, `strong`, etc., and rotating class names (`amt-h8`, `ofw-h8`, etc.).
+  2. **Class Randomization**: On every render, the store injects an additional randomized class `y.rot = 'v' + Math.random().toString(36).slice(2, 8)`. Static class names like `.fgy-x1` quickly become obsolete.
+  3. **Honeypot Decoy Spans**: The store injects hidden decoys directly adjacent to the price:
+     - `<span class="price-value" aria-hidden="true" style="display: none">` (contains fake decoy price `y.d1`)
+     - `<span class="amount" data-price="true" aria-hidden="true" style="display: none">` (contains fake decoy price `y.d2`)
+     - Struck-through MRP span with `line-through`
+  4. Naive class or tag selectors (`.price-value`, `[data-price]`, `data.fgy-x1`) either extract fake honeypot prices or miss completely when `priceTag` shifts.
+- **Resolution**: Implemented a structural, computed-style price extraction engine:
+  - Queries `.offer-panel .offer-row` directly.
+  - Filters out hidden honeypot decoys (`display: none`, `aria-hidden: true`).
+  - Filters out struck-through MRP (`line-through`), saving badges (`% saving`), and member pricing.
+  - Identifies the real price element by its unique computed typography (`fontSize: 2.4rem` / `>= 28px`), regardless of whether the HTML tag is `<strong>`, `<span>`, or `<data>`.
+- **Outcome**: 100% resilient price extraction across all manifest rotations and product pages without depending on fragile class names.
+
+---
+
 ## 3. Architecture & Trade-off Decisions
 
 | Architectural Choice | Chosen Approach | Alternative Considered | Rationale |

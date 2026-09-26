@@ -127,15 +127,45 @@ async function scrapeProductWithRetry(storeUrl, optionIndex) {
       const storeAttemptMatch = offerFootText.match(/(\d+)\s+attempt/);
       const storeAttempts = storeAttemptMatch ? parseInt(storeAttemptMatch[1], 10) : 1;
 
-      // Extract displayed price from data.fgy-x1 (the large styled price element)
-      const priceText = await page.$eval('data.fgy-x1', (el) => el.textContent.trim()).catch(() => null);
+      // Extract displayed price from the active selling price element inside .offer-row
+      // The store rotates tags (strong/span/data) and randomizes class names per manifest revision.
+      // The true selling price is the visible element with fontSize 2.4rem inside .offer-row,
+      // ignoring hidden honeypot decoys, struck-through MRP, and saving badges.
+      const priceText = await page.evaluate(() => {
+        const offerRow = document.querySelector('.offer-panel .offer-row');
+        if (!offerRow) return null;
+
+        const candidates = Array.from(offerRow.querySelectorAll('*')).filter((el) => {
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          if (el.getAttribute('aria-hidden') === 'true') return false;
+          if (style.textDecorationLine.includes('line-through') || el.style.textDecoration?.includes('line-through')) return false;
+
+          const text = el.textContent?.trim() || '';
+          if (text.includes('saving') || text.includes('Member price') || text.includes('Refreshing')) return false;
+          if (!/[0-9\uFF10-\uFF19]/.test(text)) return false;
+
+          return true;
+        });
+
+        for (const el of candidates) {
+          if (el.style?.fontSize === '2.4rem' || parseFloat(window.getComputedStyle(el).fontSize) >= 28) {
+            return el.textContent.trim();
+          }
+        }
+
+        const directChild = candidates.find((el) => el.parentElement === offerRow);
+        if (directChild) return directChild.textContent.trim();
+
+        return candidates.length > 0 ? candidates[0].textContent.trim() : null;
+      });
       const price = parsePrice(priceText);
 
       // Extract stock from .avail-pill
       const stockText = await page.$eval('.avail-pill', (el) => el.textContent.trim()).catch(() => null);
 
       // Validate — never store partial data
-      if (price === null) throw new Error(`Price selector matched but text unparseable: "${priceText}"`);
+      if (price === null) throw new Error(priceText === null ? 'Price element not found in .offer-row after offer-ready' : `Price selector matched but text unparseable: "${priceText}"`);
       if (stockText === null) throw new Error('Stock element (.avail-pill) not found after offer-ready');
 
       const outcome = (attempt > 1 || storeAttempts > 1) ? 'retried' : 'success';
