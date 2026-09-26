@@ -8,7 +8,7 @@ The application tracks product prices and stock availability over time from INE'
 
 ## 🚀 Live Demo & Repository
 
-- **Live Frontend**: [https://your-app.vercel.app](https://your-app.vercel.app) *(replace after deployment)*
+- **Live Frontend**: [https://product-price-tracker-five.vercel.app](https://product-price-tracker-five.vercel.app)
 - **Database**: Supabase (PostgreSQL)
 - **Repository**: [https://github.com/pchhabra07/INE_ProductPriceTracker](https://github.com/pchhabra07/INE_ProductPriceTracker)
 
