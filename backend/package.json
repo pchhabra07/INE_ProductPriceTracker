@@ -4,7 +4,8 @@
   "description": "INE Product Price Tracker — Express backend",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
+    "start": "npx playwright install chromium && node app.js",
+    "build": "npx playwright install chromium",
     "dev": "nodemon app.js"
   },
   "dependencies": {

@@ -44,7 +44,10 @@ async function scrapeProductWithRetry(storeUrl, optionIndex) {
   for (let attempt = 1; attempt <= MAX_OUR_RETRIES; attempt++) {
     let browser = null;
     try {
-      browser = await chromium.launch({ headless: true });
+      browser = await chromium.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      });
       const context = await browser.newContext();
       const page = await context.newPage();
 

@@ -3,6 +3,7 @@ const { runScheduledScrape, scrapeNow, getProductHistory } = require('../control
 
 const router = express.Router();
 
+router.get('/run-scheduled-scrape', runScheduledScrape);
 router.post('/run-scheduled-scrape', runScheduledScrape);
 router.post('/scrape-now/:trackedProductId', scrapeNow);
 router.get('/product-history/:trackedProductId', getProductHistory);

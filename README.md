@@ -158,8 +158,7 @@ Frontend runs on `http://localhost:5173`.
 Because free-tier Render instances sleep after inactivity, scheduled scrapes are triggered externally:
 
 - **Schedule**: Every 2 hours (`0 */2 * * *`)
-- **Trigger service**: [cron-job.org](https://cron-job.org)
-- **Endpoint**: `POST https://your-backend.onrender.com/scrape/run-scheduled-scrape?token=YOUR_CRON_SECRET`
+- **Endpoint**: `GET` or `POST` `https://your-backend.onrender.com/scrape/run-scheduled-scrape?token=YOUR_CRON_SECRET`
 - **Behavior**: The webhook wakes the Render instance, responds immediately with `{ "message": "Scrape job started" }` to avoid HTTP timeouts, then asynchronously scrapes all active tracked products in Supabase.
 
 > Set up a second cron job hitting `GET https://your-backend.onrender.com/health` every 10 minutes to keep the instance warm between scrape runs.
@@ -197,7 +196,7 @@ node scraper/runHeaded.js
 | `POST` | `/products/track-product` | Track a product + run immediate first scrape |
 | `GET` | `/products/list-tracked` | List all active tracked products |
 | `DELETE` | `/products/untrack-product/:id` | Soft-delete (deactivate) a tracked product |
-| `POST` | `/scrape/run-scheduled-scrape?token=` | Cron-triggered batch scrape (all products) |
+| `GET` / `POST` | `/scrape/run-scheduled-scrape?token=` | Cron-triggered batch scrape (all products) |
 | `POST` | `/scrape/scrape-now/:trackedProductId` | On-demand manual scrape for one product |
 | `GET` | `/scrape/product-history/:trackedProductId` | Full price history for one product |
 | `GET` | `/export/export-history-csv` | Download full history as CSV |
