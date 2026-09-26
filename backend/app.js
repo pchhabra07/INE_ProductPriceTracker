@@ -10,7 +10,9 @@ const supabase = require('./config/supabaseClient');
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
+// Strip any accidental trailing slash from CLIENT_URL so CORS matching is always exact
+const allowedOrigin = (process.env.CLIENT_URL || '*').replace(/\/$/, '');
+app.use(cors({ origin: allowedOrigin }));
 app.use(express.json());
 
 // Simple request logger: [Time] METHOD /path -> STATUS (duration)
