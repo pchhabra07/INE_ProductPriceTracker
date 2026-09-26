@@ -85,16 +85,4 @@ async function getProductHistory(req, res, next) {
   }
 }
 
-// GET /scrape/product-log/:trackedProductId
-// Returns scrape log for a single product — same data as history, semantically a log view.
-async function getProductLog(req, res, next) {
-  try {
-    const { trackedProductId } = req.params;
-    const log = await getHistoryForProduct(trackedProductId);
-    res.json({ log });
-  } catch (err) {
-    next(err);
-  }
-}
-
-module.exports = { runScheduledScrape, scrapeNow, getProductHistory, getProductLog };
+module.exports = { runScheduledScrape, scrapeNow, getProductHistory };

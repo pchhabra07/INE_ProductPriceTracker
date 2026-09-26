@@ -131,7 +131,7 @@ export default function SearchPage() {
         {searching && (
           <div className="loading-wrap">
             <div className="spinner" />
-            <span>Scanning 960 products across 48 pages…</span>
+            <span>Scanning 960 products across 16 pages…</span>
           </div>
         )}
 
