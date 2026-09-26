@@ -24,6 +24,11 @@ const TRACKED_PRODUCT_ID = null; // set to a real UUID after inserting via the A
 const MAX_OUR_RETRIES = 3;
 const BACKOFF_MS = [2000, 5000];
 
+// Sentinel error — store exhausted its own 6-attempt retry; we should not re-open the browser.
+class StoreExhaustedError extends Error {
+  constructor(msg) { super(msg); this.name = 'StoreExhaustedError'; }
+}
+
 // Parse price string handling intentional store obfuscation:
 // zero-width spaces (\u200B), non-breaking spaces (\u00A0), full-width digits (\uFF10-\uFF19), euro (,00), trailing (/- taxes)
 function parsePrice(text) {
@@ -109,7 +114,7 @@ async function runHeaded() {
       );
       if (isFailed) {
         const errorMsg = await page.$eval('.offer-panel .offer-msg', (el) => el.textContent.trim()).catch(() => 'Store price fetch failed after 6 internal attempts');
-        throw new Error(`Store internal failure: ${errorMsg}`);
+        throw new StoreExhaustedError(`Store exhausted all retries: ${errorMsg}`);
       }
 
       const offerFootText = await page.$eval('.offer-foot span', (el) => el.textContent.trim()).catch(() => '');
@@ -140,7 +145,12 @@ async function runHeaded() {
 
     } catch (err) {
       lastError = err;
-      console.warn(`[HEADED] Attempt ${attempt} failed: ${err.message}`);
+      if (err instanceof StoreExhaustedError) {
+        console.warn(`[HEADED] Store exhausted all its retries — recording failure immediately (no outer retry).`);
+        console.warn(`[HEADED] Reason: ${err.message}`);
+        break;
+      }
+      console.warn(`[HEADED] Attempt ${attempt} transient failure: ${err.message}`);
       if (attempt < MAX_OUR_RETRIES) {
         const wait = BACKOFF_MS[attempt - 1] || 5000;
         console.log(`[HEADED] Backing off ${wait}ms...`);

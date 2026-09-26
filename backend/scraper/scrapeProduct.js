@@ -1,7 +1,18 @@
 const { chromium } = require('playwright');
 
-const MAX_OUR_RETRIES = 3;       // our own outer retry loop (on top of the store's 6-attempt UI retry)
+// Outer retry settings — only for TRANSIENT failures (timeouts, DOM errors, network blips).
+// NOT used when the store itself exhausted all 6 internal attempts (that is a real failure, not transient).
+const MAX_OUR_RETRIES = 3;
 const BACKOFF_MS = [2000, 5000]; // wait 2s after attempt 1, 5s after attempt 2
+
+// Sentinel error class — thrown when the store's own 6-attempt mechanism reports offer-failed.
+// Caught by the outer loop to skip retrying (pointless to re-open a browser seconds after the store just gave up).
+class StoreExhaustedError extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = 'StoreExhaustedError';
+  }
+}
 
 // Parse price string handling intentional store obfuscation:
 // zero-width spaces (\u200B), non-breaking spaces (\u00A0), full-width digits (\uFF10-\uFF19), euro (,00), trailing (/- taxes)
@@ -102,8 +113,10 @@ async function scrapeProductWithRetry(storeUrl, optionIndex) {
         document.querySelector('.offer-panel')?.classList.contains('offer-failed')
       );
       if (isFailed) {
+        // Store ran all 6 of its own retries and still failed — this is NOT a transient error.
+        // Throw StoreExhaustedError so the outer loop records it immediately without retrying.
         const errorMsg = await page.$eval('.offer-panel .offer-msg', (el) => el.textContent.trim()).catch(() => 'Store price fetch failed after 6 internal attempts');
-        throw new Error(`Store internal failure: ${errorMsg}`);
+        throw new StoreExhaustedError(`Store exhausted all retries: ${errorMsg}`);
       }
 
       // Read how many attempts the store took (shown in .offer-foot span)
@@ -129,7 +142,15 @@ async function scrapeProductWithRetry(storeUrl, optionIndex) {
 
     } catch (err) {
       lastError = err;
-      console.warn(`[SCRAPE] Attempt ${attempt} failed: ${err.message}`);
+      if (err instanceof StoreExhaustedError) {
+        // The store itself ran 6 attempts and gave up — retrying us immediately is pointless.
+        // Record honest failure now; the next cron run (2h later) is the real retry.
+        console.warn(`[SCRAPE] Store exhausted all its retries — recording failure immediately (no outer retry).`);
+        console.warn(`[SCRAPE] Reason: ${err.message}`);
+        break; // exit the outer for-loop immediately
+      }
+      // Transient error (timeout, selector miss, network blip) — retry with backoff
+      console.warn(`[SCRAPE] Attempt ${attempt} transient failure: ${err.message}`);
       if (attempt < MAX_OUR_RETRIES) {
         const wait = BACKOFF_MS[attempt - 1] || 5000;
         console.log(`[SCRAPE] Backing off ${wait}ms before retry...`);
