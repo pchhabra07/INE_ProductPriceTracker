@@ -38,8 +38,9 @@ function parsePrice(text) {
 // wait for the store's own retry mechanism to resolve, then extract price + stock from the DOM.
 //
 // Returns: { price: number|null, stock: string|null, outcome: string, attemptCount: number, errorMessage: string|null }
-async function scrapeProductWithRetry(storeUrl, optionIndex) {
+async function scrapeProductWithRetry(storeUrl, optionIndex, productLabel = '') {
   let lastError = null;
+  const labelPrefix = productLabel ? `${productLabel} ` : '';
 
   for (let attempt = 1; attempt <= MAX_OUR_RETRIES; attempt++) {
     let browser = null;
@@ -51,15 +52,21 @@ async function scrapeProductWithRetry(storeUrl, optionIndex) {
       const context = await browser.newContext();
       const page = await context.newPage();
 
-      console.log(`[SCRAPE] Attempt ${attempt}/${MAX_OUR_RETRIES} — ${storeUrl} opt o${optionIndex}`);
+      // Automatically intercept and dismiss cookie consent overlay whenever it appears
+      await page.addLocatorHandler(page.locator('.consent-scrim .ctl-main'), async (btn) => {
+        await btn.click().catch(() => {});
+        console.log(`[SCRAPE] ${labelPrefix}Cookie consent dismissed automatically by handler`);
+      });
+
+      console.log(`[SCRAPE] ${labelPrefix}Attempt ${attempt}/${MAX_OUR_RETRIES} — ${storeUrl} opt o${optionIndex}`);
 
       await page.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-      // Dismiss cookie consent banner if it appears
+      // Dismiss cookie consent banner if it appears immediately
       const consentBtn = page.locator('.consent-scrim .ctl-main');
       if (await consentBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await consentBtn.click();
-        console.log(`[SCRAPE] Cookie consent dismissed`);
+        await consentBtn.click().catch(() => {});
+        console.log(`[SCRAPE] ${labelPrefix}Cookie consent dismissed`);
       }
 
       // Wait for option chips to appear, then select the target option
@@ -169,7 +176,7 @@ async function scrapeProductWithRetry(storeUrl, optionIndex) {
       if (stockText === null) throw new Error('Stock element (.avail-pill) not found after offer-ready');
 
       const outcome = (attempt > 1 || storeAttempts > 1) ? 'retried' : 'success';
-      console.log(`[SCRAPE] Success — price: ${price}, stock: "${stockText}", outcome: ${outcome}`);
+      console.log(`[SCRAPE] ${labelPrefix}Success — price: ${price}, stock: "${stockText}", outcome: ${outcome}`);
 
       return { price, stock: stockText, outcome, attemptCount: attempt, errorMessage: null };
 
@@ -178,15 +185,15 @@ async function scrapeProductWithRetry(storeUrl, optionIndex) {
       if (err instanceof StoreExhaustedError) {
         // The store itself ran 6 attempts and gave up — retrying us immediately is pointless.
         // Record honest failure now; the next cron run (2h later) is the real retry.
-        console.warn(`[SCRAPE] Store exhausted all its retries — recording failure immediately (no outer retry).`);
-        console.warn(`[SCRAPE] Reason: ${err.message}`);
+        console.warn(`[SCRAPE] ${labelPrefix}Store exhausted all its retries — recording failure immediately (no outer retry).`);
+        console.warn(`[SCRAPE] ${labelPrefix}Reason: ${err.message}`);
         break; // exit the outer for-loop immediately
       }
       // Transient error (timeout, selector miss, network blip) — retry with backoff
-      console.warn(`[SCRAPE] Attempt ${attempt} transient failure: ${err.message}`);
+      console.warn(`[SCRAPE] ${labelPrefix}Attempt ${attempt} transient failure: ${err.message}`);
       if (attempt < MAX_OUR_RETRIES) {
         const wait = BACKOFF_MS[attempt - 1] || 5000;
-        console.log(`[SCRAPE] Backing off ${wait}ms before retry...`);
+        console.log(`[SCRAPE] ${labelPrefix}Backing off ${wait}ms before retry...`);
         await new Promise((r) => setTimeout(r, wait));
       }
     } finally {
@@ -195,7 +202,7 @@ async function scrapeProductWithRetry(storeUrl, optionIndex) {
   }
 
   // All attempts exhausted — log a failed row (never silently drop failures)
-  console.error(`[SCRAPE] All ${MAX_OUR_RETRIES} attempts failed. Last error: ${lastError?.message}`);
+  console.error(`[SCRAPE] ${labelPrefix}All ${MAX_OUR_RETRIES} attempts failed. Last error: ${lastError?.message}`);
   return {
     price: null,
     stock: null,

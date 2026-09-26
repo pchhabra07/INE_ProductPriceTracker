@@ -17,6 +17,9 @@ app.use(express.json());
 
 // Simple request logger: [Time] METHOD /path -> STATUS (duration)
 app.use((req, res, next) => {
+  // Skip logging for health checks to keep console logs clean
+  if (req.path === '/health') return next();
+
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;

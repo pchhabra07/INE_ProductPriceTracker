@@ -21,9 +21,14 @@ async function runScheduledScrape(req, res, next) {
     const products = await listTrackedProducts();
     console.log(`[CRON] Starting scrape run — ${products.length} products to scrape`);
 
-    for (const product of products) {
-      console.log(`[CRON] Scraping: ${product.product_name} — ${product.option_name}`);
-      const result = await scrapeProductWithRetry(product.store_url, product.option_index);
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      const productNum = i + 1;
+      const total = products.length;
+      const label = `[Tracked Product ${productNum}/${total}]`;
+
+      console.log(`[CRON] ${label} Scraping: "${product.product_name}" (${product.option_name})`);
+      const result = await scrapeProductWithRetry(product.store_url, product.option_index, label);
 
       await insertPriceHistory({
         trackedProductId: product.id,
@@ -34,7 +39,7 @@ async function runScheduledScrape(req, res, next) {
         errorMessage: result.errorMessage,
       });
 
-      console.log(`[CRON] Done: ${product.product_name} — ${result.outcome} (price: ${result.price})`);
+      console.log(`[CRON] ${label} Done: "${product.product_name}" — ${result.outcome} (price: ${result.price})`);
     }
 
     console.log(`[CRON] Scrape run complete at ${new Date().toISOString()}`);
@@ -54,8 +59,9 @@ async function scrapeNow(req, res, next) {
       return res.status(404).json({ error: 'Tracked product not found' });
     }
 
-    console.log(`[MANUAL SCRAPE] Scraping: "${product.product_name}" (${product.option_name})...`);
-    const result = await scrapeProductWithRetry(product.store_url, product.option_index);
+    const label = `"${product.product_name}"`;
+    console.log(`[MANUAL SCRAPE] Scraping: ${label} (${product.option_name})...`);
+    const result = await scrapeProductWithRetry(product.store_url, product.option_index, label);
 
     const historyRow = await insertPriceHistory({
       trackedProductId: product.id,

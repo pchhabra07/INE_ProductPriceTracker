@@ -66,7 +66,7 @@ async function trackProduct(req, res, next) {
     if (!alreadyTracked || existingHistory.length === 0) {
       console.log(`[TRACK] Running initial scrape for "${productName}" (${optionName})...`);
       try {
-        const scrapeResult = await scrapeProductWithRetry(storeUrl, parseInt(optionIndex, 10));
+        const scrapeResult = await scrapeProductWithRetry(storeUrl, parseInt(optionIndex, 10), `"${productName}"`);
         initialScrapeResult = await insertPriceHistory({
           trackedProductId: data.id,
           price: scrapeResult.price,

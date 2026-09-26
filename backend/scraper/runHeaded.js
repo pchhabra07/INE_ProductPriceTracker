@@ -59,14 +59,20 @@ async function runHeaded() {
       const page = await context.newPage();
       await page.setViewportSize({ width: 1280, height: 800 });
 
+      // Automatically intercept and dismiss cookie consent overlay whenever it appears
+      await page.addLocatorHandler(page.locator('.consent-scrim .ctl-main'), async (btn) => {
+        await btn.click().catch(() => {});
+        console.log('[HEADED] Cookie consent dismissed automatically by handler');
+      });
+
       console.log(`[HEADED] Navigating to ${HARDCODED_URL}`);
       await page.goto(HARDCODED_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-      // Dismiss cookie consent if present
+      // Dismiss cookie consent if present immediately
       const consentBtn = page.locator('.consent-scrim .ctl-main');
       if (await consentBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         console.log('[HEADED] Dismissing cookie banner...');
-        await consentBtn.click();
+        await consentBtn.click().catch(() => {});
       }
 
       await page.waitForSelector('.opt-chip', { timeout: 10000 });
