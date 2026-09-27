@@ -5,13 +5,25 @@ const { chromium } = require('playwright');
 const MAX_OUR_RETRIES = 3;
 const BACKOFF_MS = [2000, 5000]; // wait 2s after attempt 1, 5s after attempt 2
 
-// Sentinel error class — thrown when the store's own 6-attempt mechanism reports offer-failed.
-// Caught by the outer loop to skip retrying (pointless to re-open a browser seconds after the store just gave up).
+// Inner challenge-retry limit — how many times we click the RETRY button after a
+// handshake/challenge failure within the same browser session before giving up.
+// Kept lower than runHeaded.js (5 vs 10) so the headless worker stays fast.
+const MAX_CHALLENGE_RETRIES = 5;
+
+// Sentinel error class — thrown when the store's own 6-attempt mechanism reports offer-failed
+// due to a quote-API failure. Caught by the outer loop to skip retrying immediately.
 class StoreExhaustedError extends Error {
   constructor(msg) {
     super(msg);
     this.name = 'StoreExhaustedError';
   }
+}
+
+// Returns true when the error text signals a handshake / challenge failure.
+// These are recoverable by clicking the RETRY button in the same browser session.
+function isChallengeFailure(msg) {
+  const lower = (msg || '').toLowerCase();
+  return lower.includes('challenge') || lower.includes('handshake') || lower.includes('unauthorized');
 }
 
 // Parse price string handling intentional store obfuscation:
@@ -105,29 +117,66 @@ async function scrapeProductWithRetry(storeUrl, optionIndex, productLabel = '') 
         { timeout: 15000 }
       );
 
-      // Click the price button inside offer-panel
-      await page.click('.offer-panel button');
-      console.log(`[SCRAPE] Clicked price button — waiting for store to resolve (up to 6 attempts internally)...`);
+      // ── Inner challenge-retry loop ────────────────────────────────────────────
+      // Click 1     : "Check Today's Price" button
+      // Clicks 2–5  : RETRY button (original is gone after click 1)
+      //   • challenge_failed  → keep clicking RETRY (recoverable in same session)
+      //   • quote-API failure → StoreExhaustedError, fast-break (same as before)
+      // ─────────────────────────────────────────────────────────────────────────
+      let priceResolved = false;
 
-      // Wait for the store's own retry mechanism to finish and the panel to show "offer-ready" or "offer-failed"
-      // The store retries up to 6 times internally; we give it up to 90s to complete
-      await page.waitForFunction(
-        () => {
-          const panel = document.querySelector('.offer-panel');
-          return panel && (panel.classList.contains('offer-ready') || panel.classList.contains('offer-failed'));
-        },
-        { timeout: 90000 }
-      );
+      for (let clickAttempt = 1; clickAttempt <= MAX_CHALLENGE_RETRIES; clickAttempt++) {
+        if (clickAttempt === 1) {
+          // First click: the original "Check Today's Price" button
+          await page.click('.offer-panel button');
+          console.log(`[SCRAPE] ${labelPrefix}Clicked price button — waiting for store to resolve (up to 6 internal attempts)...`);
+        } else {
+          // Subsequent clicks: the original button is gone; click the error panel's RETRY button
+          console.log(`[SCRAPE] ${labelPrefix}Challenge retry ${clickAttempt}/${MAX_CHALLENGE_RETRIES} — waiting 2s then clicking RETRY...`);
+          await new Promise((r) => setTimeout(r, 2000));
+          await page.waitForFunction(
+            () => { const btn = document.querySelector('.offer-panel button'); return btn && !btn.disabled; },
+            { timeout: 15000 }
+          ).catch(() => console.warn(`[SCRAPE] ${labelPrefix}RETRY button slow to enable, clicking anyway`));
+          await page.click('.offer-panel button');
+        }
 
-      const isFailed = await page.evaluate(() =>
-        document.querySelector('.offer-panel')?.classList.contains('offer-failed')
-      );
-      if (isFailed) {
-        // Store ran all 6 of its own retries and still failed — this is NOT a transient error.
-        // Throw StoreExhaustedError so the outer loop records it immediately without retrying.
-        const errorMsg = await page.$eval('.offer-panel .offer-msg', (el) => el.textContent.trim()).catch(() => 'Store price fetch failed after 6 internal attempts');
-        throw new StoreExhaustedError(`Store exhausted all retries: ${errorMsg}`);
+        // Wait for the store's own retry mechanism to finish (offer-ready or offer-failed)
+        await page.waitForFunction(
+          () => {
+            const panel = document.querySelector('.offer-panel');
+            return panel && (panel.classList.contains('offer-ready') || panel.classList.contains('offer-failed'));
+          },
+          { timeout: 90000 }
+        );
+
+        const isFailed = await page.evaluate(() =>
+          document.querySelector('.offer-panel')?.classList.contains('offer-failed')
+        );
+
+        if (!isFailed) {
+          priceResolved = true;
+          break;
+        }
+
+        const errorMsg = await page.$eval(
+          '.offer-panel .offer-msg', (el) => el.textContent.trim()
+        ).catch(() => 'Store price fetch failed');
+
+        if (isChallengeFailure(errorMsg)) {
+          // Handshake / challenge failure — recoverable; next iteration clicks RETRY
+          console.warn(`[SCRAPE] ${labelPrefix}Challenge failure (attempt ${clickAttempt}/${MAX_CHALLENGE_RETRIES}): "${errorMsg}"`);
+          if (clickAttempt === MAX_CHALLENGE_RETRIES) {
+            // All inner challenge retries exhausted — fall through to outer retry
+            throw new Error(`Challenge failed after ${MAX_CHALLENGE_RETRIES} attempts: ${errorMsg}`);
+          }
+        } else {
+          // Quote-API failure: store ran all 6 of its own retries and gave up.
+          // Retrying us immediately is pointless — record honest failure now.
+          throw new StoreExhaustedError(`Store exhausted all retries: ${errorMsg}`);
+        }
       }
+
 
       // Read how many attempts the store took (shown in .offer-foot span)
       const offerFootText = await page.$eval('.offer-foot span', (el) => el.textContent.trim()).catch(() => '');
