@@ -139,30 +139,75 @@ The heart of this assignment is achieving **unattended, 100% reliable scraping a
 
 ---
 
+### 🛑 Problem 7: Two-Tier Failure Differentiation & Inner Challenge Retries
+- **Symptom**: After successfully unlocking and clicking "Check Today's Price", the initial button disappears completely from the DOM and is replaced by an error panel with a "Retry" button. Early scrapers treated any error as a fatal outer failure, tore down the browser, and started a new outer attempt from scratch. This was slow and caused scrapes to fail when a simple click on the in-page "Retry" button could have succeeded.
+- **Investigation**: Deep inspection revealed two distinct failure paths:
+  1. **Outcome (a) — Handshake / Challenge Failure**: The client-side cryptographic handshake (`/api/v2/handshake`) fails due to transient timing or rate limits. The panel displays an error message containing `'challenge'`, `'handshake'`, or `'unauthorized'`. The page is still in a valid state and the "Retry" button is fully clickable. Clicking this button re-runs the handshake without reloading the page.
+  2. **Outcome (b) — Quote-API Exhaustion**: The store's internal handshake passes, but the store's backend price quote service fails across all 6 of its internal retries (`Retrying Attempt 6/6` -> `.offer-failed`). At this point, the store itself has completely given up.
+- **Resolution**:
+  - Implemented an **inner challenge-retry loop** directly inside the active browser page:
+    - Click 1: Clicks the initial "Check Today's Price" button.
+    - Clicks 2–10 (headed) / 2–5 (headless): Detects `.offer-failed`. If `isChallengeFailure(errorMsg)` is true, waits 2s and clicks the `.offer-panel button` (the "Retry" button) repeatedly within the same browser session.
+  - Implemented a **fast-break for Quote-API Exhaustion (`StoreExhaustedError`)**:
+    - If the store exhausted all 6 of its internal retries, running outer retries (launching 3 new browsers) is futile and dishonest.
+    - Throws `StoreExhaustedError`, breaking out of the outer loop immediately.
+    - Records an honest `failed` outcome in Supabase with `price: null, stock: null` and the exact store error message, leaving the next scheduled cron (2 hours later) as the natural retry.
+- **Outcome**: Handshake failures recover quickly within the same session, while legitimate store downtime is logged honestly without wasting system resources.
+
+---
+
+### 🛑 Problem 8: Store Structural Drift & Selector Invalidation
+- **Symptom**: If the mock storefront modifies its underlying component tree or shifts its selector namespace, scrapers relying solely on element presence will spin waiting for elements until timeout, recording generic timeout errors that disguise the root cause.
+- **Investigation**: Critical DOM dependencies include `.opt-chip` (variant selection), `.offer-panel` (interactive anti-bot area), `.offer-panel button` (handshake trigger), `.avail-pill` (stock badge), and `.offer-row` (price container). If all these selectors vanish simultaneously, it indicates an intentional structural redesign rather than a transient network drop.
+- **Resolution**:
+  - **Runtime Change Detection**:
+    - Scraper monitors critical anchor selectors upon page load.
+    - If `.opt-chip`, `.offer-panel`, and `.avail-pill` are all missing, the scraper tags the error with `{ isStructureChange: true }`.
+    - Returns `outcome: 'structure_changed'` immediately and triggers the in-app `alertEngine`, notifying the user on the dashboard bell icon.
+  - **Synthetic CI/CD Canary Script**:
+    - Built a standalone test suite in `backend/scraper/detectStructureChange.js` (`npm run test:structure`).
+    - Validates pre-click DOM contracts, interactive hover-unlock mouse behavior, and post-resolution DOM contracts against the live mock store.
+    - Integrated as an automated watchdog in GitHub Actions.
+- **Outcome**: Immediate, transparent visibility into storefront design changes both during unattended scrape runs and in CI/CD before deployments.
+
+---
+
 ## 3. Architecture & Trade-off Decisions
 
 | Architectural Choice | Chosen Approach | Alternative Considered | Rationale |
 |---|---|---|---|
 | **Catalog & Options Fetching** | Lightweight HTTP (`axios`) | Headless Browser (`Playwright`) | The catalog listings API is fast, public, and not protected by anti-bot. Using HTTP reduced search latency by 98% and eliminated browser memory overhead. |
 | **Price & Stock Scraping** | Headless Browser (`Playwright`) | HTTP Reverse Engineering | Price retrieval executes client-side WebAssembly proof-of-work and validates native browser mouse events. Simulating this in Node without a browser is extremely fragile; Playwright provides 100% fidelity. |
+| **Error Recovery Strategy** | Inner "Retry" Button Clicks (up to 10 attempts) + Outer Fast-Break on `StoreExhaustedError` | Blind Full-Page Reloads / Multi-Browser Outer Retries | Handshake errors are recoverable within the same session. Conversely, once the store has exhausted its 6 internal retries, spawning fresh browsers is redundant. The two-tier strategy saves over 2 minutes per scrape. |
 | **Scheduling Architecture** | Protected HTTP Webhook (`POST /scrape/run-scheduled-scrape`) + External Cron (`cron-job.org`) | Always-on background `setInterval` loop | Free hosting platforms (Render) put idle containers to sleep. An always-on loop terminates when sleeping; an external webhook wakes the container up reliably on schedule. |
 | **Scheduled Execution Pattern** | Asynchronous Webhook Acknowledgement (HTTP 200 returned immediately, scraping proceeds in background) | Synchronous Blocking Request | Scraping multiple products takes 15–45 seconds. Synchronous requests risk HTTP 504 gateway timeouts on free-tier proxies. |
+| **Change Detection Strategy** | Dual-Layer: Scraper Fast-Break (`structure_changed`) + CI/CD Synthetic Canary (`detectStructureChange.js`) | Manual Inspection Only | Scraper flags unexpected DOM changes in production, while CI/CD catches structural breakage before code ships. |
+| **Alert Delivery System** | In-App Real-Time Notification Center with Bell Icon & Unread Badges | External Email (e.g., SendGrid) | In-app alerts provide instant feedback within the dashboard, require zero third-party email domain verification or credit cards, and keep the user experience seamless. |
 | **Tracking Model** | Single Global Tracked Board in Supabase | User Authentication (JWT / Sessions) | The assignment specification specifically requests a single shared dashboard with 2–3 products tracked for reviewers, without any mention of auth or multi-tenancy. Avoiding auth keeps the system focused and eliminates over-engineering. |
 
 ---
 
 ## 4. Verification & Operational Tools
 
-To ensure all assignment deliverables can be inspected and demonstrated:
+To ensure all assignment deliverables can be inspected, demonstrated, and validated:
 
 1. **Observable Headed Run**:
    - Location: [backend/scraper/runHeaded.js](file:///e:/Pratham/Project%20Files/INE_Assignment/INE_ProductPriceTracker/backend/scraper/runHeaded.js)
    - Command: `node scraper/runHeaded.js`
-   - Purpose: Launches Chromium with `headless: false` and `slowMo: 400` so reviewers can record a 2–4 minute video demonstrating the mouse unlock, retry indicators, and price extraction.
-2. **Standalone Cron Worker**:
+   - Purpose: Launches Chromium with `headless: false` and `slowMo: 400` so reviewers can record a 2–4 minute video demonstrating mouse unlocking, internal retry indicators, error-panel RETRY clicks (up to 10 attempts), and price extraction.
+2. **Store Structure Canary Check**:
+   - Location: [backend/scraper/detectStructureChange.js](file:///e:/Pratham/Project%20Files/INE_Assignment/INE_ProductPriceTracker/backend/scraper/detectStructureChange.js)
+   - Command: `npm run test:structure` (in `backend/`)
+   - Purpose: Automated test script that validates pre-click DOM contracts, anti-bot mouse tracking, and post-resolution DOM elements against `https://demo.inelabteamdev.com`. Exits with code 0 on match, code 1 on change.
+3. **CI/CD Pipelines (GitHub Actions)**:
+   - Workflows: [`.github/workflows/ci.yml`](file:///e:/Pratham/Project%20Files/INE_Assignment/INE_ProductPriceTracker/.github/workflows/ci.yml) and [`.github/workflows/store-watchdog.yml`](file:///e:/Pratham/Project%20Files/INE_Assignment/INE_ProductPriceTracker/.github/workflows/store-watchdog.yml)
+   - Purpose:
+     - `ci.yml`: Runs on every push/PR with parallel jobs for Frontend (lint + Vite build), Backend (syntax check), and Store Canary (Playwright headless test).
+     - `store-watchdog.yml`: Scheduled daily canary job and manual dispatch to guard against unattended mock store changes.
+4. **Standalone Cron Worker**:
    - Location: [backend/scraper/cronWorker.js](file:///e:/Pratham/Project%20Files/INE_Assignment/INE_ProductPriceTracker/backend/scraper/cronWorker.js)
    - Command: `node scraper/cronWorker.js`
    - Purpose: Standalone CLI tool that can be triggered locally or via system cron without running the web server.
-3. **Automated CSV History Export**:
+5. **Automated CSV History Export**:
    - Endpoint: `GET /export/export-history-csv`
    - Purpose: Streams all historical scrape attempts across all tracked products in the exact CSV format required by the specification.
