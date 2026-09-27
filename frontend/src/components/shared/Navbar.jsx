@@ -20,11 +20,11 @@ export default function Navbar() {
           type="button"
           className="nav-link nav-search-trigger"
           onClick={openSearch}
-          title="Search products (Cmd+K / Ctrl+K)"
+          title="Search products (Ctrl+K)"
         >
           <Search size={15} />
           <span>Search</span>
-          <span className="nav-kbd-pill">⌘K</span>
+          <kbd className="nav-kbd-pill">Ctrl+K</kbd>
         </button>
 
         <NavLink

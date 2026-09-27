@@ -1123,15 +1123,26 @@ body {
 }
 
 .nav-kbd-pill {
-  font-size: 0.675rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.6875rem;
   font-weight: 600;
-  padding: 0.15rem 0.4rem;
-  border-radius: var(--radius-sm);
+  letter-spacing: 0.02em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
   background-color: var(--bg-1);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  border: 1px solid var(--border-hover);
+  color: var(--text-secondary);
   line-height: 1;
-  margin-left: 0.25rem;
+  margin-left: 0.4rem;
+  white-space: nowrap;
+}
+
+.nav-search-trigger:hover .nav-kbd-pill {
+  border-color: var(--accent);
+  color: var(--text-primary);
 }
 
 .search-overlay-backdrop {
