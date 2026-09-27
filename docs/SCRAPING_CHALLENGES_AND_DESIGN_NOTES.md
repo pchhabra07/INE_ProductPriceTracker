@@ -16,7 +16,26 @@ The heart of this assignment is achieving **unattended, 100% reliable scraping a
 
 ## 2. Exhaustive Log of Problems Encountered & Root-Cause Analyses
 
-### 🛑 Problem 1: Client-Side React SPA & Search Timeouts
+### 🛑 Problem 1: Polymorphic HTML Price Tag Rotation & Honeypot Decoys
+- **Symptom**: Scraper worked initially with static tag selectors (such as `data.fgy-x1` or `.price-value`), but suddenly began returning `null` on different products or across recurring runs, throwing `Price selector matched but text unparseable: "null"`, or extracting fake prices that did not match the real store price.
+- **Investigation**: Deep inspection of `/assets/index-GaW5Fnef.js` and `/api/v2/ui/manifest` revealed advanced anti-bot evasion:
+  1. **Dynamic Manifest & Tag Rotation**: The store periodically updates its UI manifest (`/api/v2/ui/manifest`), dynamically rotating the active `priceTag` element between `<data>`, `<span>`, and `<strong>` across products and revisions.
+  2. **Class Randomization**: On every render, the store injects an additional randomized rotation class `y.rot = 'v' + Math.random().toString(36).slice(2, 8)`. Static class names like `.fgy-x1` or `.amt-h8` quickly become obsolete.
+  3. **Honeypot Decoy Spans**: Directly adjacent to the price, the store injects hidden decoys:
+     - `<span class="price-value" aria-hidden="true" style="display: none">` (contains fake decoy price `y.d1`)
+     - `<span class="amount" data-price="true" aria-hidden="true" style="display: none">` (contains fake decoy price `y.d2`)
+     - Struck-through MRP span with `line-through` styling.
+  4. Naive class or tag selectors (`.price-value`, `[data-price]`, `data.fgy-x1`) either extract fake honeypot prices or miss completely when `priceTag` shifts between `data`, `span`, and `strong`.
+- **Resolution**: Implemented a tag-agnostic, computed-style price extraction engine:
+  - Queries all children within `.offer-panel .offer-row` directly, completely agnostic to the specific HTML tag (`*`).
+  - Filters out hidden honeypot decoys (`display: none`, `visibility: hidden`, `aria-hidden: true`).
+  - Filters out struck-through MRP (`textDecorationLine.includes('line-through')`), saving badges (`% saving`), and member pricing.
+  - Identifies the real active selling price by its unique computed typography (`fontSize: 2.4rem` or computed `fontSize >= 28px`), guaranteeing accurate extraction regardless of whether the store rotates the HTML tag to `<strong>`, `<span>`, or `<data>`.
+- **Outcome**: 100% resilient price extraction across all manifest tag rotations, randomized classes, and honeypot traps without depending on fragile tag or class names.
+
+---
+
+### 🛑 Problem 2: Client-Side React SPA & Search Timeouts
 - **Symptom**: Initial attempts using lightweight HTTP tools (`axios` + `cheerio`) against catalog and homepage URLs returned an empty `<div id="root"></div>`. When we pivoted to sequential Playwright navigation across 48 pages, catalog searches took 15–30 seconds, occasionally triggering `page.waitForSelector('article.card')` timeout exceptions and resulting in `500 Internal Server Error` responses in the frontend console.
 - **Investigation**: Inspecting the browser network traffic during page navigation revealed that the React client actually retrieves products via an internal REST API:
   - Catalog listings: `GET /api/v2/listings?page=X&limit=60`
@@ -26,7 +45,7 @@ The heart of this assignment is achieving **unattended, 100% reliable scraping a
 
 ---
 
-### 🛑 Problem 2: Behavioral Anti-Bot Mouse Tracker (`Ar` Class)
+### 🛑 Problem 3: Behavioral Anti-Bot Mouse Tracker (`Ar` Class)
 - **Symptom**: On product pages, the "Check today’s price" button starts in a locked state (`.offer-panel.offer-locked`). Standard Playwright hover commands (`await page.locator('.offer-panel').hover()`) failed to unlock the button; the element remained permanently disabled.
 - **Investigation**: Decompiled the compiled production JavaScript bundle (`index-GaW5Fnef.js`) and located the internal anti-bot tracker class `Ar`:
   ```javascript
@@ -50,7 +69,7 @@ The heart of this assignment is achieving **unattended, 100% reliable scraping a
   }
   ```
 - **Root Cause**:
-  1. The store requires **at least 8 distinct `mousemove` events**, each separated by **$\ge 40\text{ms}$**. A single Playwright `hover()` only emits a single coordinate event.
+  1. The store requires **at least 8 distinct `mousemove` events**, each separated by **>= 40ms**. A single Playwright `hover()` only emits a single coordinate event.
   2. The cursor must remain within `.offer-panel` for a minimum **dwell time of 600ms**.
   3. The click event checks `e.nativeEvent.isTrusted` to verify that real browser events were dispatched.
 - **Resolution**:
@@ -69,7 +88,7 @@ The heart of this assignment is achieving **unattended, 100% reliable scraping a
 
 ---
 
-### 🛑 Problem 3: The Unicode Typography Trap
+### 🛑 Problem 4: The Unicode Typography Trap
 - **Symptom**: Playwright locator `page.locator('button[aria-label="Check today\'s price"]')` timed out after 15,000ms even after the button unlocked.
 - **Root Cause**: The HTML attribute in the mock store uses a typographic **right single quotation mark** (`’`, Unicode `U+2019`), whereas standard code and keyboards use the **ASCII apostrophe** (`'`, Unicode `U+0027`):
   - Store markup: `aria-label="Check today’s price"` (`U+2019`)
@@ -78,13 +97,13 @@ The heart of this assignment is achieving **unattended, 100% reliable scraping a
 
 ---
 
-### 🛑 Problem 4: Price Text Obfuscation & Invisible Injections
+### 🛑 Problem 5: Price Text Obfuscation & Invisible Injections
 - **Symptom**: Standard numeric parsing (`parseFloat(text.replace(/[₹,\s]/g, ''))`) threw `NaN` errors on certain products or extracted prices that were 100x too large (e.g., extracting `3311600` instead of `33116`).
 - **Investigation**: Analysis of the store's string formatter `Ir(e, t, n)` revealed 5 randomized presentation modes designed to confuse regex and parsers:
   1. `spaced`: Replaces commas with spaces (`₹ 33 116`).
   2. `euro`: Appends `,00` at the end (`₹33.116,00`).
   3. `trailing`: Appends tax text (`₹33,116/- (incl. of all taxes)`).
-  4. `unicode`: Replaces digits $0–9$ with full-width Unicode characters (`\uFF10` to `\uFF19`, e.g. `３３,１１６`).
+  4. `unicode`: Replaces digits 0–9 with full-width Unicode characters (`\uFF10` to `\uFF19`, e.g. `３３,１１６`).
   5. `nbsp` & `zero-width`: Injects invisible zero-width spaces (`\u200B`) and non-breaking spaces (`\u00A0`) between every digit (`₹\u00A0\u200B4\u00A0\u200B2...`).
 - **Resolution**: Engineered a multi-stage Unicode sanitization pipeline:
   ```javascript
@@ -109,7 +128,7 @@ The heart of this assignment is achieving **unattended, 100% reliable scraping a
 
 ---
 
-### 🛑 Problem 5: Synthetic Latency & Intermittent 5xx Errors
+### 🛑 Problem 6: Synthetic Latency & Intermittent 5xx Errors
 - **Symptom**: When "Check today's price" is clicked, the store intentionally simulates network instability, displaying retry indicators on the UI: `"Retrying Attempt (x/6)"`.
 - **Investigation**: The storefront client attempts up to 6 internal retries with backoff `300ms * attempt`. If successful, the container transitions to `.offer-panel.offer-ready`. If all 6 attempts fail, it transitions to `.offer-panel.offer-failed`.
 - **Resolution**:
@@ -117,25 +136,6 @@ The heart of this assignment is achieving **unattended, 100% reliable scraping a
   - If `.offer-failed` is detected, it throws an error immediately rather than hanging.
   - Wrapped the entire process in an **outer 3-attempt retry loop** with exponential backoff (2s, 5s) to survive intermittent failures.
   - If all 3 outer attempts fail, the failure is honestly recorded in Supabase (`outcome: 'failed'`, `price: null`, `stock: null`, `errorMessage: ...`), adhering strictly to assignment guidelines.
-
----
-
-### 🛑 Problem 6: Polymorphic Price Tag Rotation & Honeypot Decoys
-- **Symptom**: Scraper worked initially with static tag selector `data.fgy-x1`, but suddenly began returning `null` on different products or after a few hours, throwing `Price selector matched but text unparseable: "null"`.
-- **Investigation**: Deep inspection of `/assets/index-GaW5Fnef.js` and `/api/v2/ui/manifest` revealed advanced anti-bot evasion:
-  1. **Dynamic Manifest**: The store periodically updates its UI manifest (`/api/v2/ui/manifest`), rotating `priceTag` between `data`, `span`, `strong`, etc., and rotating class names (`amt-h8`, `ofw-h8`, etc.).
-  2. **Class Randomization**: On every render, the store injects an additional randomized class `y.rot = 'v' + Math.random().toString(36).slice(2, 8)`. Static class names like `.fgy-x1` quickly become obsolete.
-  3. **Honeypot Decoy Spans**: The store injects hidden decoys directly adjacent to the price:
-     - `<span class="price-value" aria-hidden="true" style="display: none">` (contains fake decoy price `y.d1`)
-     - `<span class="amount" data-price="true" aria-hidden="true" style="display: none">` (contains fake decoy price `y.d2`)
-     - Struck-through MRP span with `line-through`
-  4. Naive class or tag selectors (`.price-value`, `[data-price]`, `data.fgy-x1`) either extract fake honeypot prices or miss completely when `priceTag` shifts.
-- **Resolution**: Implemented a structural, computed-style price extraction engine:
-  - Queries `.offer-panel .offer-row` directly.
-  - Filters out hidden honeypot decoys (`display: none`, `aria-hidden: true`).
-  - Filters out struck-through MRP (`line-through`), saving badges (`% saving`), and member pricing.
-  - Identifies the real price element by its unique computed typography (`fontSize: 2.4rem` / `>= 28px`), regardless of whether the HTML tag is `<strong>`, `<span>`, or `<data>`.
-- **Outcome**: 100% resilient price extraction across all manifest rotations and product pages without depending on fragile class names.
 
 ---
 
@@ -211,3 +211,27 @@ To ensure all assignment deliverables can be inspected, demonstrated, and valida
 5. **Automated CSV History Export**:
    - Endpoint: `GET /export/export-history-csv`
    - Purpose: Streams all historical scrape attempts across all tracked products in the exact CSV format required by the specification.
+
+---
+
+## 5. What AI Tools Got Wrong on First Attempt & How We Corrected Them
+
+1. **Fragile Tag & Class Selectors for Price**:
+   - *AI Mistake*: AI initially generated hardcoded selectors like `data.fgy-x1` or `.price-value`. The mock store periodically updates its UI manifest, dynamically rotating `priceTag` between `data`, `span`, and `strong`, while randomizing class names and injecting decoy honeypots. Locators broke whenever tags rotated.
+   - *Correction*: We replaced all tag- and class-based targeting with computed-style typography filtering (`fontSize >= 28px` / `2.4rem` inside `.offer-row`), making price extraction completely immune to tag rotation.
+
+2. **The Hover Illusion**:
+   - *AI Mistake*: AI assumed a standard `page.hover()` call would unlock the "Check today’s price" button.
+   - *Correction*: Playwright's single-coordinate hover was ignored by the store's `Ar` tracker. Decompiling the client bundle revealed that the store requires at least 8 distinct mouse movements spaced by at least 40ms and 600ms dwell time. We replaced the hover call with a 12-step programmatic mouse trajectory with dwell wait.
+
+3. **The ASCII vs. Typographic Apostrophe**:
+   - *AI Mistake*: AI targeted `button[aria-label="Check today's price"]` using an ASCII apostrophe (`'`).
+   - *Correction*: The store markup uses a typographic right single quotation mark (`’`, `U+2019`). Locators timed out silently. We fixed this by targeting `.offer-panel button` structurally.
+
+4. **Naive Price Parsing & Zero-Width Traps**:
+   - *AI Mistake*: Standard `parseFloat()` threw errors on full-width Unicode digits (`０-９`), injected zero-width spaces (`\u200B`), and European `,00` endings.
+   - *Correction*: Engineered a custom Unicode normalization and regex pipeline to strip invisible tokens, remove European decimal suffixes, and convert full-width numerals to clean integers.
+
+5. **Blind Outer Retrying on Store Exhaustion**:
+   - *AI Mistake*: The initial AI retry logic blindly re-opened a new browser up to 3 times even when the store's own 6-attempt mechanism had explicitly reported terminal failure (`offer-failed`).
+   - *Correction*: Introduced `StoreExhaustedError` to differentiate store-level downtime from transient network blips. When the store exhausts its retries, the failure is recorded immediately and honestly without wasting time on redundant browser restarts.

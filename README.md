@@ -46,11 +46,14 @@ The mock storefront (`https://demo.inelabteamdev.com`) features several delibera
    - If the store succeeds → `.offer-ready`. If all 6 fail → `.offer-failed`.
 5. **Text & Number Obfuscation**:
    - Price text contains zero-width spaces (`\u200B`), non-breaking spaces (`\u00A0`), full-width Unicode numerals (`０-９`), Euro-style formatting (`,00`), and trailing tax disclaimers.
+6. **Dynamic HTML Tag & Class Rotation (Polymorphic Price Elements)**:
+   - The storefront rotates the price container tag between `<data>`, `<span>`, and `<strong>`, injects randomized class names per render, and places hidden honeypot decoy spans with fake prices adjacent to the real price.
 
 ### 🛠 How We Solved These
 
 - **Reliable Button Unlocking**: Scraper scrolls `.offer-panel` into view, computes its exact bounding box, and dispatches 12 jittered mouse movements (60ms apart) + 700ms dwell wait — exceeding the store's validation criteria 100% of the time.
 - **Dual-State Settlement Detection**: Instead of a static sleep, waits dynamically for `.offer-panel.offer-ready` OR `.offer-panel.offer-failed` (up to 90s).
+- **Tag-Agnostic Computed-Style Extraction**: Instead of fragile tag or class selectors (which break when the store rotates between `<strong>`, `<span>`, and `<data>`), our extractor inspects all candidate elements inside `.offer-row`, discards hidden honeypot spans (`display: none`, `aria-hidden: true`) and struck-through MRP, and isolates the true selling price by its computed font size (`fontSize: 2.4rem` / computed `fontSize >= 28px`).
 - **Smart Two-Tier Retry Logic**:
   - If the store exhausts all 6 of its own retries (`offer-failed`): failure is recorded **immediately** without re-opening the browser. This is honest — the store itself gave up; the next scheduled cron run (2h later) is the natural retry.
   - If a **transient technical error** occurs (timeout, DOM selector miss, network blip): our outer loop retries up to 3 times with 2s/5s backoff.
@@ -228,6 +231,8 @@ node scraper/runHeaded.js
 3. **Number Parsing & Zero-Width Traps**: Standard `parseFloat` failed on `₹ ４２,１４１` due to full-width Unicode digits and hidden zero-width spaces. Designed a comprehensive Unicode-cleaning pipeline that normalises full-width digits (`\uFF10-\uFF19`), strips invisible characters, removes `,00` cent suffixes, and extracts the correct integer.
 
 4. **Blind Outer Retrying on Store Exhaustion**: Initial retry logic re-opened a browser up to 3 times even when the store's own 6-attempt mechanism had explicitly reported failure (`offer-failed`). This was wasteful (4.5 min worst case) and somewhat dishonest. Refactored using a `StoreExhaustedError` sentinel class: store exhaustion → record failure immediately; transient error → retry with backoff.
+
+5. **Fragile Tag & Class Selectors for Price**: Initial AI code generated hardcoded selectors like `data.fgy-x1` or `.price-value`. The mock store periodically updates its UI manifest, rotating `priceTag` between `data`, `span`, and `strong`, while randomizing class names and injecting decoy honeypots. Locators broke on tag rotations. We replaced tag/class targeting with computed-style typography filtering (`fontSize >= 28px` / `2.4rem` inside `.offer-row`).
 
 ---
 
