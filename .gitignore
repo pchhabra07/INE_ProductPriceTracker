@@ -4,3 +4,6 @@ dist/
 .DS_Store
 *.log
 scratch/
+docs/Software_Engineer_Intern_Assignment.md
+docs/ProjectGuide.md
+docs/Product-Price-Tracker-Implementation-Plan.md
