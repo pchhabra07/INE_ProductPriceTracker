@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Download, Loader2 } from 'lucide-react';
 
 const SERVER = import.meta.env.VITE_SERVER_URL;
 
@@ -26,8 +27,23 @@ export default function ExportButton() {
   };
 
   return (
-    <button className="btn btn-secondary" onClick={handleExport} disabled={loading}>
-      {loading ? '⏳ Exporting…' : '⬇ Export CSV'}
+    <button
+      type="button"
+      className="btn btn-secondary"
+      onClick={handleExport}
+      disabled={loading}
+    >
+      {loading ? (
+        <>
+          <Loader2 size={16} className="spin-icon" />
+          <span>Exporting…</span>
+        </>
+      ) : (
+        <>
+          <Download size={16} />
+          <span>Export CSV</span>
+        </>
+      )}
     </button>
   );
 }

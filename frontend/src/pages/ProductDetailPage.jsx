@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  RefreshCw,
+  LineChart as LineChartIcon,
+  ClipboardList,
+  ExternalLink,
+  Play,
+  AlertCircle,
+  Clock,
+  Search,
+  Loader2,
+} from 'lucide-react';
 import Navbar from '../components/shared/Navbar';
 import PriceHistoryChart from '../components/shared/PriceHistoryChart';
 import ScrapeLogTable from '../components/shared/ScrapeLogTable';
@@ -77,11 +89,13 @@ export default function ProductDetailPage() {
       <main className="page">
         {/* Back link */}
         <button
-          className="btn btn-secondary btn-sm"
+          type="button"
+          className="btn btn-secondary btn-sm back-btn"
           style={{ marginBottom: '1.5rem' }}
           onClick={() => navigate('/dashboard')}
         >
-          ← Back to Dashboard
+          <ArrowLeft size={15} />
+          <span>Back to Dashboard</span>
         </button>
 
         {loading && (
@@ -91,63 +105,91 @@ export default function ProductDetailPage() {
           </div>
         )}
 
-        {error && <div className="alert alert-error">⚠ {error}</div>}
+        {error && (
+          <div className="alert alert-error">
+            <AlertCircle size={18} />
+            <span>{error}</span>
+          </div>
+        )}
 
         {!loading && product && (
           <>
             {/* Product header */}
-            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="page-header detail-header">
               <div>
                 <h1 className="page-title">{product.product_name}</h1>
                 <p className="page-subtitle">
-                  {product.option_name} · {product.department} · {product.brand}
+                  {product.option_name} • {product.department} {product.brand ? `• ${product.brand}` : ''}
                 </p>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                  Store ID: #{product.store_product_id} ·{' '}
-                  <a href={product.store_url} target="_blank" rel="noreferrer"
-                    style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-                    View on store ↗
+                <div className="store-link-row">
+                  <span className="store-id-tag">ID: #{product.store_product_id}</span>
+                  <a
+                    href={product.store_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="store-ext-link"
+                  >
+                    <span>View on store</span>
+                    <ExternalLink size={12} />
                   </a>
-                </p>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <div className="header-actions">
                 <button
+                  type="button"
                   className="btn btn-primary btn-sm"
                   onClick={handleScrapeNow}
                   disabled={scraping}
                 >
                   {scraping ? (
-                    <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Scraping…</>
+                    <>
+                      <Loader2 size={15} className="spin-icon" />
+                      <span>Scraping…</span>
+                    </>
                   ) : (
-                    '🔄 Scrape Now'
+                    <>
+                      <RefreshCw size={15} />
+                      <span>Scrape Now</span>
+                    </>
                   )}
                 </button>
                 <ExportButton />
               </div>
             </div>
 
-            <div className="glow-line" />
-
             {/* Empty history banner */}
             {history.length === 0 && (
-              <div className="card-glass" style={{ textAlign: 'center', padding: '2rem', marginBottom: '2rem' }}>
-                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
-                <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: '0.5rem' }}>No scrape records yet</h3>
-                <p style={{ color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-                  This product has not been scraped yet. Run its first scrape now to fetch its price and stock!
+              <div className="card empty-banner">
+                <div className="empty-banner-icon">
+                  <Clock size={36} strokeWidth={1.5} />
+                </div>
+                <h3 className="empty-banner-title">No scrape records yet</h3>
+                <p className="empty-banner-desc">
+                  This product has not been scraped yet. Run its first scrape now to fetch the latest price and stock.
                 </p>
-                <button className="btn btn-primary" onClick={handleScrapeNow} disabled={scraping}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleScrapeNow}
+                  disabled={scraping}
+                >
                   {scraping ? (
-                    <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Scraping Today’s Price…</>
+                    <>
+                      <Loader2 size={16} className="spin-icon" />
+                      <span>Scraping Today's Price…</span>
+                    </>
                   ) : (
-                    '⚡ Run First Scrape Now'
+                    <>
+                      <Play size={15} />
+                      <span>Run First Scrape Now</span>
+                    </>
                   )}
                 </button>
               </div>
             )}
 
             {/* Stats row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+            <div className="stats-grid">
               {[
                 { label: 'Current Price', value: formatPrice(latestPrice), color: 'var(--accent)' },
                 { label: 'Lowest Seen', value: formatPrice(minPrice), color: 'var(--success)' },
@@ -155,11 +197,9 @@ export default function ProductDetailPage() {
                 { label: 'Total Scrapes', value: history.length, color: 'var(--text-primary)' },
                 { label: 'Failed Scrapes', value: failCount, color: failCount > 0 ? 'var(--danger)' : 'var(--text-muted)' },
               ].map((stat) => (
-                <div key={stat.label} className="card-glass" style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {stat.label}
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 800, color: stat.color }}>
+                <div key={stat.label} className="card stat-card">
+                  <div className="stat-label">{stat.label}</div>
+                  <div className="stat-value" style={{ color: stat.color }}>
                     {stat.value}
                   </div>
                 </div>
@@ -167,16 +207,23 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Tab switcher */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-              {['chart', 'log'].map((tab) => (
-                <button
-                  key={tab}
-                  className={`btn ${activeTab === tab ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab === 'chart' ? '📈 Price Chart' : '📋 Scrape Log'}
-                </button>
-              ))}
+            <div className="tab-switcher">
+              <button
+                type="button"
+                className={`tab-btn ${activeTab === 'chart' ? 'active' : ''}`}
+                onClick={() => setActiveTab('chart')}
+              >
+                <LineChartIcon size={15} />
+                <span>Price Chart</span>
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${activeTab === 'log' ? 'active' : ''}`}
+                onClick={() => setActiveTab('log')}
+              >
+                <ClipboardList size={15} />
+                <span>Scrape Log</span>
+              </button>
             </div>
 
             {/* Chart */}
@@ -184,19 +231,23 @@ export default function ProductDetailPage() {
 
             {/* Log table */}
             {activeTab === 'log' && (
-              <>
-                <p className="section-label">{history.length} total scrape attempt{history.length !== 1 ? 's' : ''}</p>
+              <div className="log-section">
+                <div className="section-label">
+                  {history.length} scrape attempt{history.length !== 1 ? 's' : ''} recorded
+                </div>
                 <ScrapeLogTable log={history} />
-              </>
+              </div>
             )}
           </>
         )}
 
         {!loading && !product && !error && (
           <div className="empty-state">
-            <div className="empty-icon">🔍</div>
+            <div className="empty-icon">
+              <Search size={44} strokeWidth={1.5} />
+            </div>
             <div className="empty-title">Product not found</div>
-            <p>This product may have been untracked.</p>
+            <p>This product may have been untracked or removed.</p>
           </div>
         )}
       </main>

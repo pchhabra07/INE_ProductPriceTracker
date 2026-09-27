@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Search, SearchX, Plus, AlertCircle, Loader2, Check } from 'lucide-react';
 import Navbar from '../components/shared/Navbar';
 
 const SERVER = import.meta.env.VITE_SERVER_URL;
@@ -38,7 +39,7 @@ export default function SearchPage() {
       const res = await fetch(`${SERVER}/products/search-store?query=${encodeURIComponent(q)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Search failed');
-      setResults(data.results);
+      setResults(data.results || []);
     } catch (err) {
       setSearchError(err.message);
     } finally {
@@ -58,7 +59,7 @@ export default function SearchPage() {
       const res = await fetch(`${SERVER}/products/product-options?storeUrl=${encodeURIComponent(product.storeUrl)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load options');
-      setOptions(data.options);
+      setOptions(data.options || []);
     } catch (err) {
       setTrackError(err.message);
     } finally {
@@ -104,50 +105,71 @@ export default function SearchPage() {
       <main className="page">
         <div className="page-header">
           <h1 className="page-title">Search Products</h1>
-          <p className="page-subtitle">Search the INE store by product name, then pick an option to track.</p>
+          <p className="page-subtitle">Search the mock store by product name, then pick an option to track.</p>
         </div>
-
-        <div className="glow-line" />
 
         {/* Search bar */}
         <div className="search-bar">
-          <input
-            ref={queryRef}
-            className="search-input"
-            type="text"
-            placeholder="e.g. MIDI Keyboard, Racing Wheel, Tablet…"
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          />
-          <button className="btn btn-primary" onClick={handleSearch} disabled={searching}>
+          <div className="search-input-wrapper">
+            <Search size={18} className="search-input-icon" />
+            <input
+              ref={queryRef}
+              className="search-input"
+              type="text"
+              placeholder="e.g. MIDI Keyboard, Racing Wheel, Tablet…"
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleSearch}
+            disabled={searching}
+          >
             {searching ? (
-              <><span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> Searching…</>
-            ) : '🔍 Search'}
+              <>
+                <Loader2 size={16} className="spin-icon" />
+                <span>Searching…</span>
+              </>
+            ) : (
+              <>
+                <Search size={16} />
+                <span>Search</span>
+              </>
+            )}
           </button>
         </div>
 
-        {searchError && <div className="alert alert-error">⚠ {searchError}</div>}
+        {searchError && (
+          <div className="alert alert-error">
+            <AlertCircle size={18} />
+            <span>{searchError}</span>
+          </div>
+        )}
 
         {/* Results */}
         {searching && (
           <div className="loading-wrap">
             <div className="spinner" />
-            <span>Scanning 960 products across 16 pages…</span>
+            <span>Searching catalog across store listings…</span>
           </div>
         )}
 
         {!searching && hasSearched && results.length === 0 && (
           <div className="empty-state">
-            <div className="empty-icon">🔍</div>
+            <div className="empty-icon">
+              <SearchX size={44} strokeWidth={1.5} />
+            </div>
             <div className="empty-title">No products found</div>
-            <p>Try a different search term.</p>
+            <p>Try a different keyword or part of the product name.</p>
           </div>
         )}
 
         {results.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: selectedProduct ? '1fr 1fr' : '1fr', gap: '1.5rem' }}>
+          <div className="search-layout">
             {/* Left: result list */}
-            <div>
-              <p className="section-label">{results.length} result{results.length !== 1 ? 's' : ''}</p>
+            <div className="search-results-pane">
+              <div className="section-label">{results.length} result{results.length !== 1 ? 's' : ''} found</div>
               <div className="result-list">
                 {results.map((r) => (
                   <div
@@ -157,7 +179,7 @@ export default function SearchPage() {
                   >
                     <div>
                       <div className="result-name">{r.productName}</div>
-                      <div className="result-meta">{r.brand} · #{r.storeProductId}</div>
+                      <div className="result-meta">{r.brand} • #{r.storeProductId}</div>
                     </div>
                     <span className="result-dept">{r.department}</span>
                   </div>
@@ -167,44 +189,64 @@ export default function SearchPage() {
 
             {/* Right: option picker */}
             {selectedProduct && (
-              <div className="card" style={{ alignSelf: 'start', position: 'sticky', top: '80px' }}>
-                <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: '0.5rem' }}>
+              <div className="card option-picker-card">
+                <h3 className="option-picker-title">
                   {selectedProduct.productName}
                 </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
-                  {selectedProduct.brand} · {selectedProduct.department}
+                <p className="option-picker-meta">
+                  {selectedProduct.brand} • {selectedProduct.department}
                 </p>
 
-                <p className="section-label">Select an option to track</p>
+                <div className="section-label" style={{ marginTop: '1.25rem' }}>Select an option to track</div>
 
                 {loadingOptions ? (
                   <div className="loading-wrap" style={{ padding: '1.5rem' }}>
                     <div className="spinner" />
-                    <span>Loading options…</span>
+                    <span>Loading available options…</span>
                   </div>
                 ) : (
                   <div className="option-grid">
                     {options.map((opt) => (
                       <button
+                        type="button"
                         key={opt.optionIndex}
                         className={`option-chip${selectedOption?.optionIndex === opt.optionIndex ? ' active' : ''}`}
                         onClick={() => setSelectedOption(opt)}
                       >
-                        {opt.optionName}
+                        {selectedOption?.optionIndex === opt.optionIndex && (
+                          <Check size={13} strokeWidth={2.5} />
+                        )}
+                        <span>{opt.optionName}</span>
                       </button>
                     ))}
                   </div>
                 )}
 
-                {trackError && <div className="alert alert-error" style={{ marginTop: '1rem' }}>⚠ {trackError}</div>}
+                {trackError && (
+                  <div className="alert alert-error" style={{ marginTop: '1rem' }}>
+                    <AlertCircle size={16} />
+                    <span>{trackError}</span>
+                  </div>
+                )}
 
                 <button
+                  type="button"
                   className="btn btn-primary"
-                  style={{ width: '100%', marginTop: '1rem', justifyContent: 'center' }}
+                  style={{ width: '100%', marginTop: '1.25rem', justifyContent: 'center' }}
                   disabled={!selectedOption || tracking}
                   onClick={handleTrack}
                 >
-                  {tracking ? '⏳ Tracking & Scraping Initial Price…' : '＋ Track this option'}
+                  {tracking ? (
+                    <>
+                      <Loader2 size={16} className="spin-icon" />
+                      <span>Tracking & Fetching Initial Price…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={16} strokeWidth={2.5} />
+                      <span>Track this option</span>
+                    </>
+                  )}
                 </button>
               </div>
             )}

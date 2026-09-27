@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, PackageOpen, AlertCircle, Search } from 'lucide-react';
 import Navbar from '../components/shared/Navbar';
 import ProductCard from '../components/shared/ProductCard';
 import ExportButton from '../components/shared/ExportButton';
-import { useNavigate } from 'react-router-dom';
 
 const SERVER = import.meta.env.VITE_SERVER_URL;
 
@@ -26,11 +27,11 @@ export default function DashboardPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load products');
 
-      setProducts(data.products);
+      setProducts(data.products || []);
 
       // Fetch latest history row for each product in parallel
       const historyEntries = await Promise.all(
-        data.products.map(async (p) => {
+        (data.products || []).map(async (p) => {
           try {
             const hRes = await fetch(`${SERVER}/scrape/product-history/${p.id}`);
             const hData = await hRes.json();
@@ -65,24 +66,27 @@ export default function DashboardPage() {
       <Navbar />
       <main className="page">
         {/* Header */}
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div className="page-header dashboard-header">
           <div>
             <h1 className="page-title">Dashboard</h1>
             <p className="page-subtitle">
               {products.length > 0
-                ? `Tracking ${products.length} product option${products.length !== 1 ? 's' : ''} · scrapes every 2 hours`
-                : 'No products tracked yet'}
+                ? `Tracking ${products.length} product option${products.length !== 1 ? 's' : ''} • Scrapes every 2 hours`
+                : 'No products currently tracked'}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <div className="header-actions">
             <ExportButton />
-            <button className="btn btn-primary" onClick={() => navigate('/search')}>
-              ＋ Track Product
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate('/search')}
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              <span>Track Product</span>
             </button>
           </div>
         </div>
-
-        <div className="glow-line" />
 
         {/* States */}
         {loading && (
@@ -92,15 +96,29 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {error && <div className="alert alert-error">⚠ {error}</div>}
+        {error && (
+          <div className="alert alert-error">
+            <AlertCircle size={18} />
+            <span>{error}</span>
+          </div>
+        )}
 
         {!loading && !error && products.length === 0 && (
           <div className="empty-state">
-            <div className="empty-icon">📦</div>
+            <div className="empty-icon">
+              <PackageOpen size={48} strokeWidth={1.5} />
+            </div>
             <div className="empty-title">Nothing tracked yet</div>
-            <p style={{ marginBottom: '1.5rem' }}>Search for a product and click "Track this option" to get started.</p>
-            <button className="btn btn-primary" onClick={() => navigate('/search')}>
-              🔍 Search Products
+            <p style={{ marginBottom: '1.5rem' }}>
+              Search for a product from the mock store and select an option to start tracking price history.
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate('/search')}
+            >
+              <Search size={16} />
+              <span>Search Products</span>
             </button>
           </div>
         )}
