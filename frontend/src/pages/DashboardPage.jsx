@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, PackageOpen, AlertCircle, Search } from 'lucide-react';
 import Navbar from '../components/shared/Navbar';
 import ProductCard from '../components/shared/ProductCard';
 import ExportButton from '../components/shared/ExportButton';
+import { useSearch } from '../context/SearchContext';
 
 const SERVER = import.meta.env.VITE_SERVER_URL;
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { openSearch } = useSearch();
+
   const [products, setProducts] = useState([]);
   const [historyMap, setHistoryMap] = useState({}); // { [productId]: latestHistoryRow }
   const [loading, setLoading] = useState(true);
@@ -17,6 +20,25 @@ export default function DashboardPage() {
   // Fetch all tracked products and their latest history row on mount
   useEffect(() => {
     loadDashboard();
+  }, []);
+
+  // Check if openSearch query param was set (e.g. from /search redirect)
+  useEffect(() => {
+    if (searchParams.get('openSearch') === 'true') {
+      openSearch();
+      searchParams.delete('openSearch');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, openSearch, setSearchParams]);
+
+  // Listen for product-tracked event to refresh dashboard seamlessly
+  useEffect(() => {
+    const handleProductTracked = () => {
+      loadDashboard();
+    };
+
+    window.addEventListener('product-tracked', handleProductTracked);
+    return () => window.removeEventListener('product-tracked', handleProductTracked);
   }, []);
 
   const loadDashboard = async () => {
@@ -80,7 +102,7 @@ export default function DashboardPage() {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => navigate('/search')}
+              onClick={openSearch}
             >
               <Plus size={16} strokeWidth={2.5} />
               <span>Track Product</span>
@@ -115,7 +137,7 @@ export default function DashboardPage() {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => navigate('/search')}
+              onClick={openSearch}
             >
               <Search size={16} />
               <span>Search Products</span>

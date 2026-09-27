@@ -1,10 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import { Search, LayoutDashboard, Sun, Moon, TrendingUp } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useSearch } from '../../context/SearchContext';
 
 // Shared navigation bar used on all pages
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
+  const { openSearch } = useSearch();
 
   return (
     <nav className="nav">
@@ -14,18 +16,22 @@ export default function Navbar() {
       </NavLink>
 
       <div className="nav-links">
-        <NavLink
-          to="/search"
-          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+        <button
+          type="button"
+          className="nav-link nav-search-trigger"
+          onClick={openSearch}
+          title="Search products (Cmd+K / Ctrl+K)"
         >
-          <Search size={16} />
+          <Search size={15} />
           <span>Search</span>
-        </NavLink>
+          <span className="nav-kbd-pill">⌘K</span>
+        </button>
+
         <NavLink
           to="/dashboard"
           className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
         >
-          <LayoutDashboard size={16} />
+          <LayoutDashboard size={15} />
           <span>Dashboard</span>
         </NavLink>
       </div>
