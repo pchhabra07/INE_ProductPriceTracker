@@ -8,6 +8,7 @@
     "build": "npx playwright install chromium",
     "dev": "nodemon app.js",
     "test:structure": "node scraper/detectStructureChange.js",
+    "headed": "node scraper/runHeaded.js",
     "check": "node -c app.js && node -c scraper/scrapeProduct.js && node -c scraper/alertEngine.js && node -c scraper/detectStructureChange.js"
   },
   "dependencies": {

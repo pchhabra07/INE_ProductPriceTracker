@@ -9,8 +9,10 @@ The application tracks product prices and stock availability over time from INE'
 ## 🚀 Live Demo & Repository
 
 - **Live Frontend**: [https://product-price-tracker-five.vercel.app](https://product-price-tracker-five.vercel.app)
+- **Live Backend API**: [https://ine-productpricetracker-backend.onrender.com](https://ine-productpricetracker-backend.onrender.com)
 - **Database**: Supabase (PostgreSQL)
 - **Repository**: [https://github.com/pchhabra07/INE_ProductPriceTracker](https://github.com/pchhabra07/INE_ProductPriceTracker)
+- **Mock Storefront**: [https://demo.inelabteamdev.com](https://demo.inelabteamdev.com)
 
 ---
 
@@ -171,6 +173,8 @@ To watch the scraper in headed mode (visible browser, slow-motion actions):
 
 ```bash
 cd backend
+npm run headed
+# or directly:
 node scraper/runHeaded.js
 ```
 
