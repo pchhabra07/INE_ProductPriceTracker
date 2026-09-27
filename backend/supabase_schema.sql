@@ -31,3 +31,21 @@ create table if not exists price_history (
 -- Index for fast per-product history lookups
 create index if not exists idx_price_history_tracked_product
   on price_history(tracked_product_id, scraped_at desc);
+
+-- 3. notifications table (Bonus: in-app alerts for price drop, stock changes, and structure changes)
+create table if not exists notifications (
+  id                  uuid primary key default gen_random_uuid(),
+  tracked_product_id  uuid        not null references tracked_products(id) on delete cascade,
+  type                text        not null,   -- 'price_drop' | 'back_in_stock' | 'structure_changed'
+  message             text        not null,
+  old_value           text,                   -- previous price or stock value
+  new_value           text,                   -- new price or stock value
+  is_read             boolean     not null default false,
+  created_at          timestamptz not null default now()
+);
+
+create index if not exists idx_notifications_unread
+  on notifications(is_read, created_at desc);
+
+create index if not exists idx_notifications_product
+  on notifications(tracked_product_id, created_at desc);

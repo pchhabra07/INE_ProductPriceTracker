@@ -6,7 +6,9 @@
   "scripts": {
     "start": "npx playwright install chromium && node app.js",
     "build": "npx playwright install chromium",
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "test:structure": "node scraper/detectStructureChange.js",
+    "check": "node -c app.js && node -c scraper/scrapeProduct.js && node -c scraper/alertEngine.js && node -c scraper/detectStructureChange.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

@@ -5,6 +5,7 @@ const cors = require('cors');
 const productRouter = require('./routers/productRouter');
 const scrapeRouter = require('./routers/scrapeRouter');
 const exportRouter = require('./routers/exportRouter');
+const notificationRouter = require('./routers/notificationRouter');
 
 const supabase = require('./config/supabaseClient');
 
@@ -37,6 +38,7 @@ app.get('/health', (req, res) => {
 app.use('/products', productRouter);
 app.use('/scrape', scrapeRouter);
 app.use('/export', exportRouter);
+app.use('/notifications', notificationRouter);
 
 // Global error handler
 app.use((err, req, res, next) => {

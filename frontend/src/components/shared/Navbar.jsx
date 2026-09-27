@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { Search, LayoutDashboard, Sun, Moon, TrendingUp } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useSearch } from '../../context/SearchContext';
+import NotificationBell from './NotificationBell';
 
 // Shared navigation bar used on all pages
 export default function Navbar() {
@@ -37,6 +38,7 @@ export default function Navbar() {
       </div>
 
       <div className="nav-actions">
+        <NotificationBell />
         <button
           type="button"
           className="theme-toggle-btn"

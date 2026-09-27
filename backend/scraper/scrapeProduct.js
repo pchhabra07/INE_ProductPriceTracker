@@ -82,7 +82,19 @@ async function scrapeProductWithRetry(storeUrl, optionIndex, productLabel = '') 
       }
 
       // Wait for option chips to appear, then select the target option
-      await page.waitForSelector('.opt-chip', { timeout: 10000 });
+      await page.waitForSelector('.opt-chip', { timeout: 10000 }).catch(async () => {
+        // If .opt-chip is missing after 10s, check if any other critical selectors
+        // are present. If they're ALL missing, the page structure likely changed.
+        const hasOfferPanel = await page.$('.offer-panel') !== null;
+        const hasAvailPill  = await page.$('.avail-pill')   !== null;
+        if (!hasOfferPanel && !hasAvailPill) {
+          console.warn(`[SCRAPE] ${labelPrefix}⚠ Structure change detected — .opt-chip, .offer-panel, and .avail-pill all missing`);
+          // Return a sentinel object recognised by the outer caller
+          throw Object.assign(new Error('Critical DOM selectors missing: .opt-chip .offer-panel .avail-pill'), { isStructureChange: true });
+        }
+        // If some selectors exist, it could still be a transient load — let it bubble normally
+        throw new Error('.opt-chip selector not found — possible transient load failure or structure change');
+      });
       const chips = await page.$$('.opt-chip');
       if (optionIndex > chips.length) {
         throw new Error(`Option index ${optionIndex} out of range (product has ${chips.length} options)`);
@@ -96,6 +108,7 @@ async function scrapeProductWithRetry(storeUrl, optionIndex, productLabel = '') 
       await offerPanel.scrollIntoViewIfNeeded();
       const box = await offerPanel.boundingBox();
       if (!box) throw new Error('Offer panel bounding box could not be determined');
+
 
       // Dispatch 12 mouse movements across the panel to satisfy minMoves
       for (let i = 0; i < 12; i++) {
@@ -237,6 +250,18 @@ async function scrapeProductWithRetry(storeUrl, optionIndex, productLabel = '') 
         console.warn(`[SCRAPE] ${labelPrefix}Store exhausted all its retries — recording failure immediately (no outer retry).`);
         console.warn(`[SCRAPE] ${labelPrefix}Reason: ${err.message}`);
         break; // exit the outer for-loop immediately
+      }
+      if (err.isStructureChange) {
+        // Critical DOM selectors are ALL absent — this is a structural change, not a transient error.
+        // Return immediately so the alert engine can fire a structure_changed notification.
+        console.warn(`[SCRAPE] ${labelPrefix}⚠ Page structure changed — returning structure_changed outcome immediately.`);
+        return {
+          price: null,
+          stock: null,
+          outcome: 'structure_changed',
+          attemptCount: attempt,
+          errorMessage: err.message,
+        };
       }
       // Transient error (timeout, selector miss, network blip) — retry with backoff
       console.warn(`[SCRAPE] ${labelPrefix}Attempt ${attempt} transient failure: ${err.message}`);

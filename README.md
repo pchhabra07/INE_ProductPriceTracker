@@ -224,3 +224,28 @@ node scraper/runHeaded.js
 3. **Number Parsing & Zero-Width Traps**: Standard `parseFloat` failed on `₹ ４２,１４１` due to full-width Unicode digits and hidden zero-width spaces. Designed a comprehensive Unicode-cleaning pipeline that normalises full-width digits (`\uFF10-\uFF19`), strips invisible characters, removes `,00` cent suffixes, and extracts the correct integer.
 
 4. **Blind Outer Retrying on Store Exhaustion**: Initial retry logic re-opened a browser up to 3 times even when the store's own 6-attempt mechanism had explicitly reported failure (`offer-failed`). This was wasteful (4.5 min worst case) and somewhat dishonest. Refactored using a `StoreExhaustedError` sentinel class: store exhaustion → record failure immediately; transient error → retry with backoff.
+
+---
+
+## 🎁 Bonus Features Implemented
+
+### 1. In-App Alerts & Notification Center
+- **Bell Icon & Notification Center**: Built into the navigation bar with an unread badge counter, polling lightweight unread count every 60s.
+- **Price-Drop Detection**: Fired automatically when a newly scraped price is lower than the previous recorded price, detailing the exact rupee discount and percentage drop.
+- **Back-in-Stock Alerts**: Fired when a product shifts from out-of-stock / sold out to an in-stock state.
+- **Page Structure Alerts**: Flags when unexpected layout changes occur on the target storefront.
+- **User Actions**: Individual "mark as read" clicks and a one-click "Mark all as read" button.
+
+### 2. Change Detection & Structural Drift Canary
+- **Dual-Layer Change Detection**:
+  1. *Runtime Scraper Detection*: The scraper detects missing critical elements (`.opt-chip`, `.offer-panel`, `.avail-pill`, etc.) and immediately categorises the run as `structure_changed`, notifying the user without wasting outer retries.
+  2. *Synthetic Canary Script*: Executed locally via `npm run test:structure` or in CI/CD. It inspects all pre-click DOM contracts, verifies the anti-bot hover-unlock behavior, clicks the offer button, and validates post-resolution DOM elements (`.offer-row`, `.avail-pill`, `.offer-msg`). Exits with diagnostic diffs and exit code `1` if the store structure changes.
+
+### 3. CI/CD with GitHub Actions
+- **Continuous Integration (`.github/workflows/ci.yml`)**:
+  - Automatically runs on every push and pull request to `main`.
+  - **Frontend Job**: Installs dependencies, runs `oxlint`, and verifies production Vite build.
+  - **Backend Job**: Validates node syntax across all controllers, routers, models, and scraper engines.
+  - **Canary Job**: Installs Playwright Chromium in headless Linux container and executes `npm run test:structure` against the live mock store.
+- **Automated Watchdog Canary (`.github/workflows/store-watchdog.yml`)**:
+  - Runs on a scheduled cron (daily at 00:00 UTC) and via manual `workflow_dispatch` button to continuously monitor target storefront structure.

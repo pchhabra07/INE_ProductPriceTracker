@@ -1,6 +1,7 @@
 const { listTrackedProducts, getTrackedProductById } = require('../models/TrackedProduct');
 const { insertPriceHistory, getHistoryForProduct } = require('../models/PriceHistory');
 const { scrapeProductWithRetry } = require('../scraper/scrapeProduct');
+const { checkAndFireAlerts } = require('../scraper/alertEngine');
 
 // POST /scrape/run-scheduled-scrape
 // Protected by CRON_SECRET (query param: ?token=...).
@@ -39,6 +40,17 @@ async function runScheduledScrape(req, res, next) {
         errorMessage: result.errorMessage,
       });
 
+      // Fire in-app alerts (price drop, back-in-stock, structure change)
+      await checkAndFireAlerts({
+        trackedProductId: product.id,
+        productName: product.product_name,
+        optionName: product.option_name,
+        newPrice: result.price,
+        newStock: result.stock,
+        outcome: result.outcome,
+        errorMessage: result.errorMessage,
+      });
+
       console.log(`[CRON] ${label} Done: "${product.product_name}" — ${result.outcome} (price: ${result.price})`);
     }
 
@@ -69,6 +81,17 @@ async function scrapeNow(req, res, next) {
       stock: result.stock,
       outcome: result.outcome,
       attemptCount: result.attemptCount,
+      errorMessage: result.errorMessage,
+    });
+
+    // Fire in-app alerts (price drop, back-in-stock, structure change)
+    await checkAndFireAlerts({
+      trackedProductId: product.id,
+      productName: product.product_name,
+      optionName: product.option_name,
+      newPrice: result.price,
+      newStock: result.stock,
+      outcome: result.outcome,
       errorMessage: result.errorMessage,
     });
 
