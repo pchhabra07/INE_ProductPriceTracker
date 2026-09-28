@@ -78,7 +78,7 @@ export default function ProductDetailPage() {
   // Stats derived from history
   const successRows = history.filter((r) => r.outcome !== 'failed' && r.price !== null);
   const prices = successRows.map((r) => Number(r.price));
-  const latestPrice = history[0]?.price ?? null;
+  const latestPrice = successRows[0]?.price ?? history[0]?.price ?? null;
   const minPrice = prices.length ? Math.min(...prices) : null;
   const maxPrice = prices.length ? Math.max(...prices) : null;
   const failCount = history.filter((r) => r.outcome === 'failed').length;

@@ -3,14 +3,28 @@ import { Check, RotateCw, X, Clock, Trash2, Tag } from 'lucide-react';
 
 // Receives one tracked product object as a prop.
 // Clicking the card navigates directly to product details.
-export default function ProductCard({ product, lastHistory, onUntrack }) {
+export default function ProductCard({ product, lastHistory, lastSuccessHistory, onUntrack }) {
   const navigate = useNavigate();
 
-  // lastHistory is the most recent price_history row for this product (or null)
-  const price = lastHistory?.price;
-  const stock = lastHistory?.stock;
-  const scrapedAt = lastHistory?.scraped_at;
-  const outcome = lastHistory?.outcome;
+  // Support separate lastSuccessHistory prop, composite object { latest, lastSuccess }, or single history row
+  const latestRow = lastHistory && 'latest' in lastHistory ? lastHistory.latest : lastHistory;
+  const successRow =
+    lastSuccessHistory !== undefined
+      ? lastSuccessHistory
+      : lastHistory && 'lastSuccess' in lastHistory
+      ? lastHistory.lastSuccess
+      : latestRow?.price !== null && latestRow?.price !== undefined
+      ? latestRow
+      : null;
+
+  // The card displays the last successfully scraped price
+  const price = successRow?.price ?? latestRow?.price ?? null;
+  // Stock from latest scrape, or falling back to last successful scrape if latest failed/empty
+  const stock = latestRow?.stock ?? successRow?.stock ?? null;
+  // Last scrape timestamp (most recent scrape attempt, or fallback to last success)
+  const scrapedAt = latestRow?.scraped_at ?? successRow?.scraped_at ?? null;
+  // Outcome badge reflects the latest scrape attempt
+  const outcome = latestRow?.outcome;
 
   // Determine stock display class
   const getStockClass = (stockText) => {
@@ -76,7 +90,18 @@ export default function ProductCard({ product, lastHistory, onUntrack }) {
 
       <div className="product-card-body">
         {price !== null && price !== undefined ? (
-          <div className="product-card-price">{formatPrice(price)}</div>
+          <div
+            className="product-card-price"
+            title={
+              latestRow?.outcome === 'failed' && successRow?.scraped_at
+                ? `Last successfully scraped: ${formatDate(successRow.scraped_at)} (latest attempt failed)`
+                : successRow?.scraped_at
+                ? `Scraped: ${formatDate(successRow.scraped_at)}`
+                : undefined
+            }
+          >
+            {formatPrice(price)}
+          </div>
         ) : (
           <div className="product-card-price no-price">Price pending…</div>
         )}

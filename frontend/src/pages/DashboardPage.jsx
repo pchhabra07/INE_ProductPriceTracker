@@ -51,16 +51,18 @@ export default function DashboardPage() {
 
       setProducts(data.products || []);
 
-      // Fetch latest history row for each product in parallel
+      // Fetch history entries for each product in parallel to get both latest attempt and last successful scrape
       const historyEntries = await Promise.all(
         (data.products || []).map(async (p) => {
           try {
             const hRes = await fetch(`${SERVER}/scrape/product-history/${p.id}`);
             const hData = await hRes.json();
-            const latest = hData.history?.[0] || null; // history is newest-first
-            return [p.id, latest];
+            const history = hData.history || [];
+            const latest = history[0] || null; // newest scrape attempt
+            const lastSuccess = history.find((h) => h.price !== null && h.price !== undefined) || null; // most recent successful scrape
+            return [p.id, { latest, lastSuccess }];
           } catch {
-            return [p.id, null];
+            return [p.id, { latest: null, lastSuccess: null }];
           }
         })
       );
@@ -152,7 +154,8 @@ export default function DashboardPage() {
               <ProductCard
                 key={p.id}
                 product={p}
-                lastHistory={historyMap[p.id]}
+                lastHistory={historyMap[p.id]?.latest}
+                lastSuccessHistory={historyMap[p.id]?.lastSuccess}
                 onUntrack={handleUntrack}
               />
             ))}
