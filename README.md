@@ -258,3 +258,13 @@ node scraper/runHeaded.js
   - **Canary Job**: Installs Playwright Chromium in headless Linux container and executes `npm run test:structure` against the live mock store.
 - **Automated Watchdog Canary (`.github/workflows/store-watchdog.yml`)**:
   - Runs on a scheduled cron (daily at 00:00 UTC) and via manual `workflow_dispatch` button to continuously monitor target storefront structure.
+
+---
+
+## 🧰 Troubleshooting
+
+- **Backend connection error:** Verify that `SUPABASE_URL` and `SUPABASE_KEY` are correctly configured in `backend/.env`.
+- **Frontend cannot reach backend:** Check that `VITE_SERVER_URL` points to the correct backend URL.
+- **Playwright browser not found:** Run `npx playwright install chromium` from the backend directory.
+- **Scraping request fails:** Check the backend logs and verify that the product URL is accessible.
+- **Scheduled scraping does not run:** Verify the cron service URL and ensure that `CRON_SECRET` matches the configured token.
