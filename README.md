@@ -258,3 +258,7 @@ node scraper/runHeaded.js
   - **Canary Job**: Installs Playwright Chromium in headless Linux container and executes `npm run test:structure` against the live mock store.
 - **Automated Watchdog Canary (`.github/workflows/store-watchdog.yml`)**:
   - Runs on a scheduled cron (daily at 00:00 UTC) and via manual `workflow_dispatch` button to continuously monitor target storefront structure.
+
+## Contributions
+
+Contributions and suggestions to improve this project are welcome.
