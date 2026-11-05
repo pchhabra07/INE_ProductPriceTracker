@@ -268,3 +268,23 @@ node scraper/runHeaded.js
 - **Playwright browser not found:** Run `npx playwright install chromium` from the backend directory.
 - **Scraping request fails:** Check the backend logs and verify that the product URL is accessible.
 - **Scheduled scraping does not run:** Verify the cron service URL and ensure that `CRON_SECRET` matches the configured token.
+---
+
+## 📁 Project Structure
+
+```text
+INE_ProductPriceTracker/
+├── backend/
+│   ├── app.js
+│   ├── package.json
+│   ├── .env.example
+│   ├── supabase_schema.sql
+│   └── supabase_notifications_migration.sql
+├── frontend/
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   └── .env.example
+├── docs/
+│   └── SCRAPING_CHALLENGES_AND_DESIGN_NOTES.md
+└── README.md
